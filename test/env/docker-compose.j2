@@ -44,4 +44,19 @@ services:
       - tailscale-nginx
     network_mode: service:tailscale-nginx
 
+  mysql:
+    container_name: mysql
+    image: mysql:8.4.4
+    volumes:
+    - db-data:/var/lib/mysql
+    - ./db-logs/log:/var/log/mysql
+    - "/etc/localtime:/etc/localtime:ro"
+    restart: unless-stopped
+    environment:
+      - MYSQL_DATABASE=project
+      - MYSQL_ROOT_PASSWORD=example
+
+volumes:
+  db-data:
+
 
