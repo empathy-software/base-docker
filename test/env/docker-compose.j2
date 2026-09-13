@@ -55,6 +55,8 @@ services:
     environment:
       - MYSQL_DATABASE=project
       - MYSQL_ROOT_PASSWORD=example
+    networks:
+      - nginx-proxy
 
 volumes:
   db-data:
