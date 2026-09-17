@@ -112,6 +112,14 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: '0644'
+    - name: seed script approvals if missing
+      copy:
+        src: "{{ playbook_dir }}/env/scriptApproval.xml"
+        dest: "/home/{{ ansible_user }}/jenkins/scriptApproval.xml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+        force: false
     - name: run jenkins and proxy
       community.docker.docker_compose_v2:
         project_src: "/home/{{ ansible_user }}/docker"

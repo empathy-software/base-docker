@@ -13,6 +13,7 @@ services:
       - "/home/{{ ansible_user }}/jenkins:/var/jenkins_home"
     image: "registry.gitlab.com/mikejw/empathy/jenkins-gig:{% if use_arch == 'pi' %}jdk25-arm64{% else %}jdk25{% endif +%}"
     container_name: "jenkins-jenkins"
+    restart: unless-stopped
     networks:
       - nginx-proxy
 

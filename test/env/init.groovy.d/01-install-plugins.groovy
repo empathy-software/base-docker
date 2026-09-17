@@ -5,50 +5,84 @@ import jenkins.model.*
 import hudson.model.*
 import java.util.logging.Logger
 
-println "--> Updating plugin metadata..."
-Jenkins.instance.updateCenter.updateAllSites()
-sleep(5000)  // wait briefly for update to complete
-
 def log = Logger.getLogger("")
 def instance = Jenkins.get()
+def pm = instance.pluginManager
+def uc = instance.updateCenter
+
+println "--> Updating plugin metadata..."
+try {
+  def siteRefresh = uc.updateAllSites()
+  if (siteRefresh instanceof Collection) {
+    siteRefresh.each { f ->
+      try {
+        f.get()
+      } catch (Exception e) {
+        log.warning "--> Update site refresh failed: ${e.message}"
+      }
+    }
+  }
+} catch (Exception e) {
+  log.warning "--> updateAllSites failed: ${e.message}"
+}
+
+def dataDeadline = System.currentTimeMillis() + 90_000
+while (System.currentTimeMillis() < dataDeadline) {
+  if (uc.sites.any { it.getData() != null }) {
+    break
+  }
+  sleep(2000)
+}
 
 def pluginNames = [
-  // Pipelines
   "workflow-aggregator", "workflow-job", "workflow-cps", "workflow-multibranch",
   "workflow-scm-step", "workflow-durable-task-step", "pipeline-stage-view",
   "pipeline-input-step", "pipeline-github-lib",
   "pipeline-model-api", "pipeline-model-definition", "pipeline-model-extensions",
   "pipeline-utility-steps",
 
-  // Git / SCM
   "git", "git-client", "github", "ssh-credentials", "scm-api",
 
-  // Credentials
-  "credentials", "credentials-binding", "plain-credentials",
-
-  // Blue Ocean
-  "blueocean"
+  "credentials", "credentials-binding", "plain-credentials"
 ]
 
-def pm = instance.pluginManager
-def uc = instance.updateCenter
-
+def jobs = []
 pluginNames.each { pluginName ->
-  if (!pm.getPlugin(pluginName)) {
-    log.info "--> Installing plugin: ${pluginName}"
-    def plugin = uc.getPlugin(pluginName)
-    if (plugin) {
-      plugin.deploy()
-    } else {
-      log.warning "--> Plugin not found in update center: ${pluginName}"
-    }
-  } else {
+  if (pm.getPlugin(pluginName)) {
     log.info "--> Plugin already installed: ${pluginName}"
+    return
+  }
+  def plugin = uc.getPlugin(pluginName)
+  if (plugin) {
+    log.info "--> Installing plugin: ${pluginName}"
+    jobs << plugin.deploy(true)
+  } else {
+    log.warning "--> Plugin not found in update center: ${pluginName}"
   }
 }
 
-instance.save()
+jobs.each { f ->
+  try {
+    f.get()
+  } catch (Exception e) {
+    log.severe "--> Plugin deploy failed: ${e.message}"
+  }
+}
 
+def idleDeadline = System.currentTimeMillis() + 180_000
+while (System.currentTimeMillis() < idleDeadline) {
+  def pending = uc.jobs.findAll { j ->
+    def name = j.status?.getClass()?.getSimpleName()
+    name in ["Pending", "Installing"]
+  }
+  if (pending.isEmpty()) {
+    break
+  }
+  log.info "--> Waiting for ${pending.size()} update-center job(s)..."
+  sleep(2000)
+}
+
+instance.save()
 
 def markerPath = Paths.get("/var/jenkins_home/.jenkins-ready")
 if (!Files.exists(markerPath)) {

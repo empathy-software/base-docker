@@ -1,0 +1,13 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<scriptApproval plugin="script-security">
+  <approvedScriptHashes/>
+  <approvedSignatures>
+    <string>method groovy.json.JsonSlurperClassic parseText java.lang.String</string>
+    <string>new groovy.json.JsonSlurperClassic</string>
+  </approvedSignatures>
+  <aclApprovedSignatures/>
+  <approvedClasspathEntries/>
+  <pendingScripts/>
+  <pendingSignatures/>
+  <pendingClasspathEntries/>
+</scriptApproval>
