@@ -87,7 +87,7 @@
         source: pull
         pull:
       loop:
-        - "registry.gitlab.com/mikejw/empathy/jenkins-gig:{{ 'jdk17-arm64' if use_arch == 'pi' else 'jdk17' }}"
+        - "registry.gitlab.com/mikejw/empathy/jenkins-gig:{{ 'jdk25-arm64' if use_arch == 'pi' else 'jdk25' }}"
         - tailscale/tailscale:latest
         - jwilder/nginx-proxy  
 
