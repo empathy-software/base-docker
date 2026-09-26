@@ -1,0 +1,317 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Empathy PaaS substrate: public Caddy proxy and test/build host.
+  Configure with test/ and proxy/ Ansible after the stack is up.
+  Does not install Docker, Jenkins, Caddy, or Tailscale.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Access
+        Parameters:
+          - SshCidr
+      - Label:
+          default: Instances
+        Parameters:
+          - AmiParameter
+          - ProxyInstanceType
+          - TestInstanceType
+          - ProxyVolumeSize
+          - TestVolumeSize
+      - Label:
+          default: Network
+        Parameters:
+          - VpcCidr
+          - PublicSubnetCidr
+    ParameterLabels:
+      SshCidr:
+        default: SSH allowed CIDR
+      AmiParameter:
+        default: Ubuntu AMI SSM parameter
+
+Parameters:
+  SshCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
+    ConstraintDescription: Must be a CIDR, for example 203.0.113.4/32.
+    Description: >
+      Who may reach port 22. Live boxes used 0.0.0.0/0; lock this to your IP when you can.
+
+  AmiParameter:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: >
+      Resolves to the current Ubuntu AMI. Live boxes used 26.04; 24.04 LTS is the recreate default.
+      For 26.04 use /aws/service/canonical/ubuntu/server/26.04/stable/current/amd64/hvm/ebs-gp3/ami-id.
+
+  ProxyInstanceType:
+    Type: String
+    Default: t3.micro
+    Description: Public Caddy / reverse-proxy host.
+
+  TestInstanceType:
+    Type: String
+    Default: t3.small
+    Description: Jenkins / build host.
+
+  ProxyVolumeSize:
+    Type: Number
+    Default: 20
+    MinValue: 8
+    Description: Root volume size in GiB for the proxy.
+
+  TestVolumeSize:
+    Type: Number
+    Default: 40
+    MinValue: 8
+    Description: Root volume size in GiB for the test/build host.
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: New VPC CIDR (not the account default 172.31.0.0/16).
+
+  PublicSubnetCidr:
+    Type: String
+    Default: 10.0.0.0/24
+    Description: Public subnet CIDR inside VpcCidr.
+
+Resources:
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub "${AWS::StackName}-key"
+      KeyType: rsa
+      KeyFormat: pem
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-key"
+        - Key: Project
+          Value: empathy-paas
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vpc"
+        - Key: Project
+          Value: empathy-paas
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-igw"
+        - Key: Project
+          Value: empathy-paas
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnetCidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public"
+        - Key: Project
+          Value: empathy-paas
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-rt"
+        - Key: Project
+          Value: empathy-paas
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  ProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Empathy public proxy (Caddy + SSH + Tailscale)
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SshCidr
+          Description: SSH
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP (Caddy ACME / redirect)
+        - IpProtocol: udp
+          FromPort: 41641
+          ToPort: 41641
+          CidrIp: 0.0.0.0/0
+          Description: Tailscale direct
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-proxy-sg"
+        - Key: Project
+          Value: empathy-paas
+
+  TestSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Empathy test/build host (SSH + Tailscale, no public HTTP)
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SshCidr
+          Description: SSH
+        - IpProtocol: udp
+          FromPort: 41641
+          ToPort: 41641
+          CidrIp: 0.0.0.0/0
+          Description: Tailscale direct
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-test-sg"
+        - Key: Project
+          Value: empathy-paas
+
+  ProxyInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      InstanceType: !Ref ProxyInstanceType
+      ImageId: !Ref AmiParameter
+      KeyName: !Ref KeyPair
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref ProxySecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref ProxyVolumeSize
+            VolumeType: gp3
+            Encrypted: true
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-proxy"
+        - Key: Role
+          Value: proxy
+        - Key: Project
+          Value: empathy-paas
+
+  TestInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      InstanceType: !Ref TestInstanceType
+      ImageId: !Ref AmiParameter
+      KeyName: !Ref KeyPair
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref TestSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref TestVolumeSize
+            VolumeType: gp3
+            Encrypted: true
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-test"
+        - Key: Role
+          Value: test
+        - Key: Project
+          Value: empathy-paas
+
+  ProxyEip:
+    Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref ProxyInstance
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-proxy-eip"
+        - Key: Project
+          Value: empathy-paas
+
+Outputs:
+  ProxyPublicIp:
+    Description: Write to hosts.proxy_ip in ~/.config/base-docker/settings.yml
+    Value: !Ref ProxyEip
+    Export:
+      Name: !Sub "${AWS::StackName}-ProxyPublicIp"
+
+  TestPublicIp:
+    Description: Write to hosts.test_ip in ~/.config/base-docker/settings.yml
+    Value: !GetAtt TestInstance.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-TestPublicIp"
+
+  ProxyInstanceId:
+    Description: Proxy EC2 instance id
+    Value: !Ref ProxyInstance
+
+  TestInstanceId:
+    Description: Test/build EC2 instance id
+    Value: !Ref TestInstance
+
+  VpcId:
+    Description: New VPC (safe to delete with the stack)
+    Value: !Ref Vpc
+
+  SshUser:
+    Description: Default SSH user on the Ubuntu AMI
+    Value: ubuntu
+
+  KeyPairId:
+    Description: EC2 key pair id; private PEM is in SSM at /ec2/keypair/<this>
+    Value: !GetAtt KeyPair.KeyPairId
+
+  KeyPairName:
+    Description: EC2 key pair name
+    Value: !Ref KeyPair
+
+  KeyPairParameter:
+    Description: SSM SecureString that holds the private PEM (fetch with fetch-keypair.sh)
+    Value: !Sub "/ec2/keypair/${KeyPair.KeyPairId}"
