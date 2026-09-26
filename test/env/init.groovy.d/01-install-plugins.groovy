@@ -72,6 +72,10 @@ jobs.each { f ->
 def idleDeadline = System.currentTimeMillis() + 180_000
 while (System.currentTimeMillis() < idleDeadline) {
   def pending = uc.jobs.findAll { j ->
+    // ConnectionCheckJob has no status; ?. does not catch a missing property.
+    if (j.hasProperty("status") == null) {
+      return false
+    }
     def name = j.status?.getClass()?.getSimpleName()
     name in ["Pending", "Installing"]
   }
