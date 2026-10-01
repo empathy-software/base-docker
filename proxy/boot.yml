@@ -18,6 +18,10 @@
       include_vars:
         file: "~/.config/base-docker/secrets.yml"
         name: secrets_vals
+    - name: remove caddy apt source signed by an expired key
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/caddy-stable.list
+        state: absent
     - name: join tailscale network
       ansible.builtin.include_role:
         name: artis3n.tailscale.machine
@@ -43,7 +47,7 @@
         dest: "/root/caddy_custom.sh"
     - name: install caddy
       ansible.builtin.shell:
-        cmd: . ./caddy.sh
+        cmd: bash ./caddy.sh
         chdir: /root
     - name: gen http pass
       ansible.builtin.command: "caddy hash-password -p {{ secrets_vals.test_http_pass }}"
