@@ -53,8 +53,8 @@ Parameters:
 
   TestInstanceType:
     Type: String
-    Default: t3.small
-    Description: Jenkins / build host.
+    Default: c7i-flex.large
+    Description: Jenkins / build host. c7i-flex.large is 2 vCPU and 4 GiB, and this account accepts it as a free-tier type.
 
   ProxyVolumeSize:
     Type: Number

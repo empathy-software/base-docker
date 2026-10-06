@@ -17,7 +17,7 @@ What it creates
 * One public subnet, internet gateway, default route
 * RSA key pair (PEM stored in SSM, not as a stack output)
 * Proxy (`t3.micro`): SSH, HTTP 80, HTTPS 443, Tailscale UDP 41641, **Elastic IP**
-* Test (`t3.small`): SSH, Tailscale UDP 41641, ephemeral public IP
+* Test (`c7i-flex.large`, 2 vCPU, 4 GiB): SSH, Tailscale UDP 41641, ephemeral public IP
 * Current Ubuntu 24.04 AMI via SSM (live boxes used 26.04)
 
 
