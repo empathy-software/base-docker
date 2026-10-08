@@ -2,5 +2,7 @@
 - name: lint sql
   shell:
     chdir: "{{ code_dir }}/{{ use_project }}"
-    cmd: "{{ virtualenv_dir }}/bin/sqlfluff fix ./{{ input_file }} --dialect mysql -f -q"
+    cmd: "{{ virtualenv_dir }}/bin/sqlfluff fix ./{{ input_file }} --dialect mysql -q"
   become: false
+  register: sqlfluff_result
+  failed_when: sqlfluff_result.rc not in [0, 1]
