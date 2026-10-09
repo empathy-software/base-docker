@@ -69,6 +69,45 @@ services:
     ports:
       - 3306:3306
 
+  # Headless Chromium with an MCP server on http://127.0.0.1:8931/mcp.
+  # The browser reaches the dev sites through the host proxy.
+  playwright-mcp:
+    container_name: playwright-mcp
+    image: mcr.microsoft.com/playwright/mcp
+    init: true
+    stdin_open: true
+    shm_size: "2gb"
+    entrypoint: ["node", "/app/cli.js"]
+    command:
+      - --headless
+      - --browser
+      - chromium
+      - --no-sandbox
+      - --port
+      - "8931"
+      - --host
+      - 0.0.0.0
+      - --allowed-hosts
+      - "*"
+      - --shared-browser-context
+      - --image-responses
+      - allow
+      - --output-dir
+      - /output
+    ports:
+      - "127.0.0.1:8931:8931"
+    volumes:
+      - /tmp/playwright-mcp:/output
+    extra_hosts:
+      - "www.dev.org:host-gateway"
+      - "cms.dev.org:host-gateway"
+{% if use_host not in ['www.dev.org', 'cms.dev.org'] %}
+      - "{{ use_host }}:host-gateway"
+{% endif %}
+    depends_on:
+      - proxy
+      - app
+
 
 {{ partial_text }}
 
