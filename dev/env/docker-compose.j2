@@ -96,6 +96,8 @@ services:
       - /output
     ports:
       - "127.0.0.1:8931:8931"
+    # main_boot.yml sets this directory to mode 1777 via Docker.
+    # A missing path is created as root:root 0755, which uid 1000 cannot write.
     volumes:
       - /tmp/playwright-mcp:/output
     extra_hosts:

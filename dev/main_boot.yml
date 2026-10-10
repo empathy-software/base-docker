@@ -39,6 +39,31 @@
     path: "{{ code_dir }}/{{ use_project }}/.env"
   register: env_file_stat
 
+# Docker creates a missing bind-mount source as root:root mode 0755.
+# playwright-mcp runs as uid 1000 and cannot write screenshots there.
+# control sets ansible_become: false, which overrides task become, so chmod
+# through the Docker daemon instead of sudo.
+- name: check playwright output dir
+  ansible.builtin.stat:
+    path: /tmp/playwright-mcp
+  register: playwright_output_dir
+
+- name: ensure playwright output dir is writable
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - -v
+      - /tmp/playwright-mcp:/output
+      - alpine:latest
+      - chmod
+      - "1777"
+      - /output
+  when: >
+    not playwright_output_dir.stat.exists or
+    playwright_output_dir.stat.mode != '1777'
+
 - name: boot
   community.docker.docker_compose_v2:
     project_src: "{{ compose_dir }}"
