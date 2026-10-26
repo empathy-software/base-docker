@@ -1,0 +1,23 @@
+- name: assemble compose config command
+  ansible.builtin.set_fact:
+    compose_config_argv: "{{ ['docker', 'compose', '--project-directory', compose_dir] }}"
+
+- name: add compose file arguments
+  ansible.builtin.set_fact:
+    compose_config_argv: "{{ compose_config_argv + ['-f', compose_dir ~ '/' ~ item] }}"
+  loop: "{{ compose_files }}"
+
+- name: add env file argument
+  ansible.builtin.set_fact:
+    compose_config_argv: "{{ compose_config_argv + ['--env-file', code_dir ~ '/' ~ use_project ~ '/.env'] }}"
+  when: env_file_stat.stat.exists | default(false)
+
+- name: list merged compose services
+  ansible.builtin.command:
+    argv: "{{ compose_config_argv + ['config', '--services'] }}"
+  changed_when: false
+  register: compose_services_cmd
+
+- name: store merged compose services
+  ansible.builtin.set_fact:
+    compose_services: "{{ compose_services_cmd.stdout_lines }}"

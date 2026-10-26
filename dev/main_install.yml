@@ -37,7 +37,9 @@
           'Please enter web root': "www.dev.org"
         echo: true
       run_once: true
-      when: operation == "qs"
+      when:
+        - operation == "qs"
+        - compose_services is not defined or 'tooling' in compose_services
 
     - name: add bootstrap theming
       block:

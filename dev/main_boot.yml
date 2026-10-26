@@ -74,5 +74,8 @@
     build: always
     env_files: "{{ env_file_stat.stat.exists | ternary([code_dir ~ '/' ~ use_project ~ '/.env'], omit) }}"
     files: "{{ compose_files }}"
+
+- name: record merged compose services
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/main_compose_services.yml"
  
  

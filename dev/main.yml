@@ -58,7 +58,9 @@
           ansible.builtin.wait_for:
             port: 3306
             delay: 20
+            timeout: 300
             host: 127.0.0.1
+          when: "'db' in compose_services"
         - name: detect build
           stat:
             path: "{{ code_dir }}/{{ use_project }}/vendor"

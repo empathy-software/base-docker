@@ -29,9 +29,17 @@
 
     - name: expose tooling result
       ansible.builtin.set_fact:
-        tooling_output: "{{ tooling_cmd_result }}"      
+        tooling_output: "{{ tooling_cmd_result }}"
+  when: compose_services is not defined or 'tooling' in compose_services
   vars:
     compose_project_dir: "{{ compose_dir }}"
     env_file_path: "{{ lookup('env','HOME') }}/code/{{ use_project }}/.env"
     tooling_service: tooling
     tooling_cmd: "composer install"
+
+- name: record skipped tooling command
+  ansible.builtin.set_fact:
+    tooling_output:
+      stdout: ""
+      rc: 0
+  when: compose_services is defined and 'tooling' not in compose_services
