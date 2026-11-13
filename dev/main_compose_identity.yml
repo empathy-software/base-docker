@@ -1,0 +1,19 @@
+---
+# Query the target host, not the controller or the become user. UID is a shell
+# variable on some systems and is not reliably exported to Compose (e.g. WSL).
+- name: read host user identifiers for compose
+  ansible.builtin.command:
+    argv: [id, "{{ item }}"]
+  loop: [-u, -g]
+  become: false
+  vars:
+    ansible_become: false
+  check_mode: false
+  changed_when: false
+  register: compose_identity
+
+- name: store compose host environment
+  ansible.builtin.set_fact:
+    compose_environment:
+      UID: "{{ compose_identity.results[0].stdout }}"
+      GID: "{{ compose_identity.results[1].stdout }}"

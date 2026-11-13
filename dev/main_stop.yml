@@ -30,6 +30,7 @@
   when: partial_stat.stat.exists
 
 - name: stop any existing containers
+  environment: "{{ compose_environment }}"
   community.docker.docker_compose_v2:
     project_src: "{{ compose_dir }}"
     state: absent

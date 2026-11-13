@@ -2,6 +2,7 @@
 
 - block:
     - name: run tooling command as root user
+      environment: "{{ compose_environment }}"
       ansible.builtin.command: >-
         docker compose
         -f {{ compose_project_dir }}/docker-compose.yml

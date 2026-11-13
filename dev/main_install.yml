@@ -23,6 +23,7 @@
 
 
     - name: set up app
+      environment: "{{ compose_environment }}"
       ansible.builtin.expect:
         command: >-
           docker compose

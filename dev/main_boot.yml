@@ -28,10 +28,9 @@
     line: "{{ item.key }}={{ item.value }}"
     create: true
   loop:
-    - { key: "UID", value: "{{ ansible_user_uid }}" }
-    - { key: "GID", value: "{{ ansible_user_gid }}" }
-  delegate_to: localhost
-  run_once: true
+    - { key: "UID", value: "{{ compose_environment.UID }}" }
+    - { key: "GID", value: "{{ compose_environment.GID }}" }
+
      
 
 - name: check if env file exists
@@ -67,6 +66,7 @@
     playwright_output_dir.stat.mode != '1777'
 
 - name: boot
+  environment: "{{ compose_environment }}"
   community.docker.docker_compose_v2:
     project_src: "{{ compose_dir }}"
     state: present

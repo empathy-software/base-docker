@@ -1,0 +1,72 @@
+---
+# Run locally on Linux, WSL, or macOS:
+# ansible-playbook -i localhost, -c local test/compose-identity.yml
+- hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    # Inventory escalation overrides task keywords unless explicitly disabled.
+    ansible_become: true
+    # Simulate facts gathered under escalation; these must not reach Compose.
+    ansible_user_uid: 0
+    ansible_user_gid: 0
+  tasks:
+    - name: resolve identity despite inherited escalation
+      ansible.builtin.include_tasks: ../dev/main_compose_identity.yml
+
+    - name: verify compose interpolation
+      become: false
+      vars:
+        ansible_become: false
+      block:
+        - name: check identity against the local invoking user
+          ansible.builtin.assert:
+            that:
+              - compose_environment.UID | string == lookup('pipe', 'id -u')
+              - compose_environment.GID | string == lookup('pipe', 'id -g')
+              - compose_identity is not changed
+
+        - name: create temporary compose directory
+          ansible.builtin.tempfile:
+            state: directory
+          register: identity_test_dir
+          check_mode: false
+
+        - name: exercise compose without inherited identifiers or an env file
+          block:
+            - name: write minimal compose config
+              ansible.builtin.copy:
+                dest: "{{ identity_test_dir.path }}/compose.yml"
+                content: |
+                  services:
+                    tooling:
+                      image: alpine
+                      user: "${UID}:${GID}"
+              check_mode: false
+
+            - name: interpolate host identity with compose
+              ansible.builtin.command:
+                argv:
+                  - docker
+                  - compose
+                  - -f
+                  - "{{ identity_test_dir.path }}/compose.yml"
+                  - config
+                  - --format
+                  - json
+              environment: "{{ compose_environment }}"
+              register: identity_config
+              changed_when: false
+              check_mode: false
+
+            - name: verify identifiers and absence of interpolation warnings
+              ansible.builtin.assert:
+                that:
+                  - (identity_config.stdout | from_json).services.tooling.user == compose_environment.UID ~ ':' ~ compose_environment.GID
+                  - "'variable is not set' not in identity_config.stderr"
+          always:
+            - name: remove temporary compose directory
+              ansible.builtin.file:
+                path: "{{ identity_test_dir.path }}"
+                state: absent
+              check_mode: false

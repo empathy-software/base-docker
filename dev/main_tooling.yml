@@ -6,7 +6,7 @@
       vars:
         tooling_cmd: >-
           mkdir -p /tmp/npm-cache &&
-          chown -R {{ ansible_user_uid }}:{{ ansible_user_gid }} /tmp/npm-cache
+          chown -R {{ compose_environment.UID }}:{{ compose_environment.GID }} /tmp/npm-cache
 
 
     - name: check for partial compose file
@@ -16,6 +16,7 @@
       run_once: true
 
     - name: run tooling command via docker compose
+      environment: "{{ compose_environment }}"
       ansible.builtin.command: >-
         docker compose
         -f {{ compose_project_dir }}/docker-compose.yml

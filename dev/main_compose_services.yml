@@ -13,6 +13,7 @@
   when: env_file_stat.stat.exists | default(false)
 
 - name: list merged compose services
+  environment: "{{ compose_environment }}"
   ansible.builtin.command:
     argv: "{{ compose_config_argv + ['config', '--services'] }}"
   changed_when: false
